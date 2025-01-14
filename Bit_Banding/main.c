@@ -1,21 +1,20 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define ALIAS_BASE 0x22000000U
-#define BITBAND_BASE 0x20000000U
+#define BITBAND_SRAM_BASE   0x22000000
+#define SRAM_BASE           0x20000000
+
+#define BITBAND_ALIAS(addr, bit)   (BITBAND_SRAM_BASE + ((addr - SRAM_BASE) * 32) + (bit * 4))
 
 int main(void) {
-	uint8_t *ptr = (uint8_t *)0x20000200;
-	*ptr = 0xFF;
+	// Accessing bit 5 of 0x20000004
+	volatile uint32_t *bit_addr = (uint32_t *)BITBAND_ALIAS(0x20000004, 5);
 
-//	Normal Method
-	*ptr &= ~(1 << 7);
+	// Set bit 5 
+	*bit_addr = 1; 
 
-	*ptr = 0xFF;
-
-//	Bit Band Method
-	uint8_t *alias_addr = (uint8_t *)(ALIAS_BASE + (32 * (0x20000200 - BITBAND_BASE)) + 7 * 4);
-	*alias_addr = 0;
+	// Clear bit 5
+	*bit_addr = 0;
 
 	for(;;);
 }
