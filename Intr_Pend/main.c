@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
 
-
 #define __vo volatile
 #define ENABLE 1
 #define DISABLE 0
