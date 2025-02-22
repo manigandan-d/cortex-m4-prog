@@ -1,26 +1,27 @@
 #include <stdio.h>
 #include <stdint.h>
 
-void generate_interrupt() {
-	uint32_t *pSTIR = (uint32_t *)0xE000EF00;
-	uint32_t *pISER0 = (uint32_t *)0xE000E100;
+#define NVIC_ISER0   ((volatile uint32_t *)0xE000E100)
+#define NVIC_STIR    ((volatile uint32_t *)0xE000EF00)
 
-	*pISER0 |= (1 << 3);
+#define IRQ_NUMBER   3
 
-	*pSTIR = (3 & 0x1FF);
+void generate_interrupt(void) {
+    *NVIC_ISER0 |= (1 << IRQ_NUMBER);
+
+    *NVIC_STIR = (IRQ_NUMBER & 0x1FF);
 }
 
 int main(void) {
-	printf("In thread mode: before interrupt\n");
+    printf("In thread mode: Before interrupt\n");
 
-	generate_interrupt();
+    generate_interrupt();
 
-	printf("In thread mode: after interrupt\n");
+    printf("In thread mode: After interrupt\n");
 
-	for(;;);
+    while (1);
 }
 
 void RTC_WKUP_IRQHandler(void) {
-	printf("In handler mode: ISR\n");
+    printf("In handler mode: ISR executed\n");
 }
-
