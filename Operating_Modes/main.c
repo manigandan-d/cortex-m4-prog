@@ -19,7 +19,7 @@ int main(void) {
 
     printf("In thread mode: After interrupt\n");
 
-    while (1);
+    while(1);
 }
 
 void RTC_WKUP_IRQHandler(void) {
