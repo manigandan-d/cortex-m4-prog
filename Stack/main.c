@@ -1,41 +1,84 @@
 #include <stdio.h>
 #include <stdint.h>
 
-__attribute__((naked)) void change_sp_to_psp(void) {
-	__asm volatile (".equ SRAM_END, (0x20000000 + (128 * 1024))");
-	__asm volatile (".equ STACK_PSP_START, (SRAM_END - 512)");
+// SRAM Configuration for Stack Allocation
+#define SRAM_START      0x20000000UL
+#define SRAM_SIZE       (128 * 1024)
+#define SRAM_END        (SRAM_START + SRAM_SIZE)
 
-	__asm volatile ("LDR R0, =STACK_PSP_START");
-	__asm volatile ("MSR PSP, R0");
+// Allocate equal stack sizes for MSP and PSP
+#define TOTAL_STACK_SIZE 1024U
+#define MSP_SIZE         (TOTAL_STACK_SIZE / 2)
+#define PSP_SIZE         (TOTAL_STACK_SIZE / 2)
 
-	__asm volatile ("MRS R1, CONTROL");
-	__asm volatile ("ORR R1, R1, #0x02");
-	__asm volatile ("MSR CONTROL, R1");
+#define MSP_START_ADDR   SRAM_END
+#define MSP_END_ADDR     (SRAM_END - MSP_SIZE)
+#define PSP_START_ADDR   MSP_END_ADDR
+#define PSP_END_ADDR     (PSP_START_ADDR - PSP_SIZE)
 
-	__asm volatile ("BX LR");
+
+// To determine current stack pointer mode
+void check_sp_mode(void) {
+    uint32_t control;
+
+    // Read CONTROL register
+    __asm volatile ("MRS %0, CONTROL" : "=r" (control));
+
+    if (control & (1 << 1))
+        printf("SP: PSP (Thread mode)\n");
+    else
+        printf("SP: MSP (Handler mode or default thread mode)\n");
 }
 
-void generate_interrupts(void) {
-	__asm volatile ("SVC #0x05");
+// To fetch current SP value
+uint32_t get_sp(void) {
+    uint32_t sp;
+    __asm volatile ("MOV %0, SP" : "=r" (sp));
+    return sp;
 }
 
-int add(int a, int b, int c, int d) {
-	return a+b+c+d;
+// ------------------------------
+// Naked function to switch from MSP to PSP
+// ------------------------------
+// Does not use function prologue/epilogue to avoid altering SP
+__attribute__((naked)) void switch_to_psp(void) {
+    // Load PSP address
+    __asm volatile ("LDR R0, =%0" :: "i" (PSP_START_ADDR));
+    __asm volatile ("MSR PSP, R0");
+
+    // Update CONTROL register to select PSP
+    __asm volatile ("MRS R1, CONTROL");
+    __asm volatile ("ORR R1, R1, #2");   // Set bit 1 (SPSEL = 1)
+    __asm volatile ("MSR CONTROL, R1");
+
+    __asm volatile ("BX LR"); // Return
+}
+
+// SVC Handler: runs in Handler mode and uses MSP
+void SVC_Handler(void) {
+    printf("In SVC_Handler...\n");
+
+    check_sp_mode();  // Should output MSP
+    printf("SVC Handler SP = 0x%08lX\n", get_sp());
 }
 
 int main(void) {
-	change_sp_to_psp();
+    printf("Booting with MSP...\n");
 
-	int res = 0;
-	res = add(7, 5, 2, 1);
+    // At reset, MSP is active
+    check_sp_mode();
+    printf("SP = 0x%08lX\n", get_sp());
 
-	printf("Result: %d\n", res);
+    // Switch to PSP in thread mode
+    switch_to_psp();
 
-	generate_interrupts();
+    printf("\nAfter switching to PSP in thread mode:\n");
+    check_sp_mode();
+    printf("SP = 0x%08lX\n", get_sp());
 
-	for(;;);
-}
+    // Trigger SVC exception to enter Handler mode (which uses MSP)
+    printf("\nTriggering SVC to enter Handler Mode...\n");
+    __asm volatile ("SVC #0");
 
-void SVC_Handler(void) {
-	printf("In SVC Handler\n");
+    while (1);
 }
