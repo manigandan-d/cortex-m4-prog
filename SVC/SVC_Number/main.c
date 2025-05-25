@@ -1,36 +1,58 @@
 #include <stdio.h>
 #include <stdint.h>
 
-int main(void) {
-	__asm volatile ("SVC #15");
+int main(void)
+{
+    // Trigger the SVC interrupt with SVC number 15
+    __asm volatile ("SVC #15");
 
-//	register uint32_t data __asm ("r0");
+    uint32_t data;
 
-	uint32_t data = 0;
-	__asm volatile ("MOV %0, R0": "=r"(data));
+    // After SVC handler finishes, move R0 (return value) into 'data' variable
+    __asm volatile ("MOV %0, R0" : "=r"(data));
 
-	printf("Data: %ld\n", data);
+    printf("Data received from SVC handler: %ld\n", data);
 
-	for(;;);
+    while(1);
 }
 
-__attribute__((naked)) void SVC_Handler(void) {
-	__asm volatile ("MRS R0, MSP");
-
-	__asm volatile ("B SVC_Handler_C");
+// SVC Handler (naked to avoid compiler-generated prologue/epilogue)
+__attribute__ ((naked)) void SVC_Handler(void)
+{
+    __asm("MRS R0, MSP");  // Load the Main Stack Pointer (MSP) into R0
+    __asm("B handle_svc"); // Branch to the C function for further processing
 }
 
-void SVC_Handler_C(uint32_t *pMSP) {
-	printf("SVC Handler\n");
+// C function to handle the SVC interrupt logic
+void handle_svc(uint32_t *pBaseOfStackFrame)
+{
+    printf("Inside SVC Handler\n");
 
-	uint8_t *pPC = (uint8_t *)pMSP[6];
-	pPC -= 2;
+    /*
+      Stack frame:
+      pBaseOfStackFrame[0] - R0
+      pBaseOfStackFrame[1] - R1
+      pBaseOfStackFrame[2] - R2
+      pBaseOfStackFrame[3] - R3
+      pBaseOfStackFrame[4] - R12
+      pBaseOfStackFrame[5] - LR
+      pBaseOfStackFrame[6] - PC (return address)
+      pBaseOfStackFrame[7] - xPSR
+    */
 
-	uint8_t SVC_Num = *pPC;
-	printf("SVC Number: %d\n", SVC_Num);
+    // Fetch the PC to determine where SVC was called
+    uint8_t *pReturn_addr = (uint8_t*)pBaseOfStackFrame[6];
 
-	SVC_Num += 4;
+    // Go back two bytes to get the SVC opcode
+    pReturn_addr -= 2;
 
-	pMSP[0] = SVC_Num;
+    // The byte at this location is the SVC number
+    uint8_t svc_number = *pReturn_addr;
+    printf("SVC Number: %d\n", svc_number);
+
+    // Modify return value by adding 5 to the SVC number
+    svc_number += 5;
+
+    // Return the new value in R0 by updating the stack frame
+    pBaseOfStackFrame[0] = svc_number;
 }
-
