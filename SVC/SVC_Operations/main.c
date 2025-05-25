@@ -1,99 +1,121 @@
 #include <stdio.h>
 #include <stdint.h>
 
+/**
+ * Add two integers using an SVC.
+ */
 int32_t add(int32_t x, int32_t y) {
-	int32_t res = 0;
+    int32_t res = 0;
 
-	__asm volatile ("SVC #1");
-	__asm volatile ("MOV %0, R0": "=r"(res));
+    // Trigger SVC #1 for addition
+    __asm volatile ("SVC #1");
+    // Move the result from R0 to the C variable 'res'
+    __asm volatile ("MOV %0, R0": "=r"(res));
 
-	return res;
+    return res;
 }
 
+/**
+ * Subtract two integers using an SVC.
+ */
 int32_t sub(int32_t x, int32_t y) {
-	int32_t res = 0;
+    int32_t res = 0;
 
-	__asm volatile ("SVC #2");
-	__asm volatile ("MOV %0, R0": "=r"(res));
+    // Trigger SVC #2 for subtraction
+    __asm volatile ("SVC #2");
+    __asm volatile ("MOV %0, R0": "=r"(res));
 
-	return res;
+    return res;
 }
 
+/**
+ * Multiply two integers using an SVC.
+ */
 int32_t mul(int32_t x, int32_t y) {
-	int32_t res = 0;
+    int32_t res = 0;
 
-	__asm volatile ("SVC #3");
-	__asm volatile ("MOV %0, R0": "=r"(res));
+    // Trigger SVC #3 for multiplication
+    __asm volatile ("SVC #3");
+    __asm volatile ("MOV %0, R0": "=r"(res));
 
-	return res;
+    return res;
 }
 
+/**
+ * Divide two integers using an SVC.
+ */
 int32_t div(int32_t x, int32_t y) {
-	int32_t res = 0;
+    int32_t res = 0;
 
-	__asm volatile ("SVC #4");
-	__asm volatile ("MOV %0, R0": "=r"(res));
+    // Trigger SVC #4 for division
+    __asm volatile ("SVC #4");
+    __asm volatile ("MOV %0, R0": "=r"(res));
 
-	return res;
+    return res;
 }
 
 int main(void) {
-	int32_t a = 12, b = 5, res = 0;
+    int32_t a = 10, b = 5, res = 0;
 
-	res = add(a, b);
-	printf("ADD: %ld\n", res);
+    res = add(a, b);
+    printf("Addition result: %ld\n", res);
 
-	res = sub(a, b);
-	printf("SUB: %ld\n", res);
+    res = sub(a, b);
+    printf("Subtraction result: %ld\n", res);
 
-	res = mul(a, b);
-	printf("MUL: %ld\n", res);
+    res = mul(a, b);
+    printf("Multiplication result: %ld\n", res);
 
-	res = div(a, b);
-	printf("DIV: %ld\n", res);
+    res = div(a, b);
+    printf("Division result: %ld\n", res);
 
-	for(;;);
+    while(1);
 }
 
+/**
+ * Naked SVC Handler: Simply gets the MSP and branches to the C handler.
+ */
 __attribute__((naked)) void SVC_Handler(void) {
-	__asm volatile ("MRS R0, MSP");
-
-	__asm volatile ("B SVC_Handler_C");
+    __asm volatile ("MRS R0, MSP");  // Load MSP (Main Stack Pointer) into R0
+    __asm volatile ("B handle_svc"); // Branch to the C handler
 }
 
-void SVC_Handler_C(uint32_t *pMSP) {
-	int32_t arg0, arg1, res;
-	arg0 = arg1 = res = 0;
+/**
+ * C-level handler for SVC calls.
+ * Extracts SVC number and performs the corresponding operation.
+ */
+void handle_svc(uint32_t *pBaseOfStackFrame) {
+    int32_t arg0, arg1, res = 0;
 
-	uint8_t *pPC = (uint8_t *)pMSP[6];
-	pPC -= 2;
+    // pBaseOfStackFrame[6] contains the PC at the time of the SVC call
+    uint8_t *pReturn_addr = (uint8_t *)pBaseOfStackFrame[6];
+    pReturn_addr -= 2; // Point to the SVC instruction
 
-	uint8_t SVC_Num = *pPC;
+    // Extract the SVC number
+    uint8_t svc_num = *pReturn_addr;
 
-	arg0 = pMSP[0];
-	arg1 = pMSP[1];
+    // Retrieve arguments from the stack frame (R0 and R1)
+    arg0 = pBaseOfStackFrame[0];
+    arg1 = pBaseOfStackFrame[1];
 
-	switch(SVC_Num) {
-	case 1:
-		res = arg0 + arg1;
-		break;
+    // Perform the requested operation based on the SVC number
+    switch(svc_num) {
+        case 1:
+            res = arg0 + arg1;
+            break;
+        case 2:
+            res = arg0 - arg1;
+            break;
+        case 3:
+            res = arg0 * arg1;
+            break;
+        case 4:
+            res = arg0 / arg1;
+            break;
+        default:
+            printf("Invalid SVC number: %d\n", svc_num);
+    }
 
-	case 2:
-		res = arg0 - arg1;
-		break;
-
-	case 3:
-		res = arg0 * arg1;
-		break;
-
-	case 4:
-		res = arg0 / arg1;
-		break;
-
-	default:
-		printf("Invalid SVC Code\n");
-	}
-
-	pMSP[0] = res;
+    // Return the result in R0 by updating the stack frame
+    pBaseOfStackFrame[0] = res;
 }
-
